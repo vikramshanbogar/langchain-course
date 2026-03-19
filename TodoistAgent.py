@@ -14,28 +14,38 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 todoist = TodoistAPI(TODOIST_TOKEN)
 
 # 2. Define the Todoist Tool
-def get_today_tasks() -> list:
-    """
-    Fetches all active tasks from Todoist due today or overdue.
-    Returns a list of dictionaries containing task content and priority.
-    """
-    try:
-        # Todoist priority: 1 (Natural) to 4 (Urgent)
-        tasks = todoist.get_tasks(filter="today | overdue")
-        return [
-            {
-                "task": t.content,
-                "priority_level": t.priority,
-                "due": t.due.date if t.due else "Today"
-            }
-            for t in tasks
-        ]
-    except Exception as e:
-        return [f"Error fetching tasks: {str(e)}"]
+from datetime import date
 
+def get_today_tasks() -> str:
+    try:
+        today = date.today()  # keep as date object, not isoformat()
+        tasks = []
+
+        for page in todoist.get_tasks():
+            for t in page:
+                if t.due:
+                    # due.date may be a date object or string depending on version
+                    due = t.due.date
+                    if isinstance(due, str):
+                        due = date.fromisoformat(due)
+                    if due <= today:
+                        tasks.append(t)
+
+        if not tasks:
+            return "No tasks found for today."
+
+        results = []
+        for t in tasks:
+            results.append(f"Task: {t.content} | Priority: {t.priority} | Due: {t.due.date}")
+
+        return "\n".join(results)
+
+    except Exception as e:
+        print(f"[DEBUG] Raw error: {repr(e)}")
+        return f"API Error: {str(e)}"
 # 3. Create the Agent Logic
 # We pass the function itself into the tools list
-model_id = "gemini-2.5-flash"
+model_id = "gemini-2.5-flash-lite"
 
 # System instructions help the model act as a productivity coach
 config = types.GenerateContentConfig(
